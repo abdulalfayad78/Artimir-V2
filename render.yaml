@@ -17,7 +17,7 @@ services:
     name: artimir-api
     runtime: node
     plan: free
-    buildCommand: npm ci && npm --prefix frontend ci && npm run build
+    buildCommand: npm ci --include=dev && npm --prefix frontend ci --include=dev && npm run build
     startCommand: npm run start:server
     healthCheckPath: /health
     envVars:
