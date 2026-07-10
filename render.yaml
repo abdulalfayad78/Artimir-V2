@@ -1,0 +1,28 @@
+services:
+  - type: web
+    name: artimir-app
+    runtime: static
+    rootDir: frontend
+    buildCommand: npm ci && npm run build
+    staticPublishPath: ./dist
+    envVars:
+      - key: VITE_SOCKET_URL
+        value: https://artimir-api.onrender.com
+      - key: VITE_PUBLIC_APP_URL
+        value: https://artimir-app.onrender.com
+      - key: VITE_MOTOR_SERVICE_URL
+        value: http://127.0.0.1:8000
+
+  - type: web
+    name: artimir-api
+    runtime: node
+    buildCommand: npm ci
+    startCommand: npm run start:server
+    healthCheckPath: /health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PUBLIC_APP_ORIGIN
+        value: https://artimir-app.onrender.com
+      - key: DEVICE_SECRET
+        sync: false

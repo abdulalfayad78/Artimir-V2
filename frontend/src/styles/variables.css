@@ -1,0 +1,32 @@
+:root {
+  --color-background: #050505;
+  --color-background-secondary: #0d0d0d;
+  --color-yellow: #ffd400;
+  --color-yellow-light: #ffe76a;
+  --color-white: #f5f5f5;
+  --color-grey: #9a9a9a;
+  --color-grey-dark: #606060;
+  --color-glass: rgba(255, 255, 255, 0.06);
+  --color-border: rgba(255, 212, 0, 0.25);
+  --color-border-soft: rgba(255, 255, 255, 0.12);
+  --color-success: #a9ffcb;
+
+  --font-display: 'Arial Narrow', 'Aptos Display', 'Helvetica Neue', Arial,
+    sans-serif;
+  --font-body: Inter, Manrope, 'Segoe UI', Arial, sans-serif;
+
+  --space-page: clamp(1.25rem, 4vw, 4.5rem);
+  --content-width: 86rem;
+  --radius-small: 0.35rem;
+  --radius-medium: 0.8rem;
+  --transition-fast: 180ms ease;
+  --transition-smooth: 500ms cubic-bezier(0.22, 1, 0.36, 1);
+
+  color: var(--color-white);
+  background: var(--color-background);
+  font-family: var(--font-body);
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
