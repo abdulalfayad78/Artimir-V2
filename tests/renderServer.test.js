@@ -98,6 +98,39 @@ test('health endpoint returns the public Render-safe payload', async (t) => {
   assert.equal(JSON.stringify(payload).includes('127.0.0.1:8000'), false)
 })
 
+test('health endpoint handles slash, query string and preserves 404 fallback', async (t) => {
+  const server = createArtimirServer({
+    localAddress: '127.0.0.1',
+    port: 0,
+  })
+  const address = await server.listen()
+  const baseUrl = `http://127.0.0.1:${address.port}`
+  const expectedPayload = {
+    status: 'ok',
+    service: 'artimir-realtime',
+  }
+
+  t.after(() => server.close())
+
+  const health = await fetch(`${baseUrl}/health`)
+  const healthSlash = await fetch(`${baseUrl}/health/`)
+  const healthQuery = await fetch(`${baseUrl}/health?render=1`)
+  const unknown = await fetch(`${baseUrl}/unknown`)
+
+  assert.equal(health.status, 200)
+  assert.equal(healthSlash.status, 200)
+  assert.equal(healthQuery.status, 200)
+  assert.match(
+    health.headers.get('content-type') ?? '',
+    /^application\/json/,
+  )
+  assert.deepEqual(await health.json(), expectedPayload)
+  assert.deepEqual(await healthSlash.json(), expectedPayload)
+  assert.deepEqual(await healthQuery.json(), expectedPayload)
+  assert.equal(unknown.status, 404)
+  assert.notEqual(await unknown.text(), 'Not Found')
+})
+
 test('production CORS exposes headers for Render frontend and not for another origin', async (t) => {
   const server = createArtimirServer({
     localAddress: '127.0.0.1',

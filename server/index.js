@@ -23,6 +23,17 @@ function readPositiveInteger(value, fallback) {
   return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback
 }
 
+function getRequestPathname(request) {
+  try {
+    return new URL(
+      request.url ?? '/',
+      'http://artimir.local',
+    ).pathname
+  } catch {
+    return '/'
+  }
+}
+
 function createArtimirServer(options = {}) {
   const port =
     options.port ??
@@ -59,7 +70,12 @@ function createArtimirServer(options = {}) {
   const store = new SessionStore({ ttlMs: sessionTtlMs })
 
   const httpServer = http.createServer((request, response) => {
-    if (request.url === '/health') {
+    const pathname = getRequestPathname(request)
+
+    if (
+      request.method === 'GET' &&
+      (pathname === '/health' || pathname === '/health/')
+    ) {
       const requestOrigin = normalizeOrigin(request.headers.origin)
       const headers = {
         'Content-Type': 'application/json; charset=utf-8',
