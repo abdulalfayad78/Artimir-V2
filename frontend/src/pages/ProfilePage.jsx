@@ -1,7 +1,6 @@
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import AnimatedBackground from '../components/AnimatedBackground'
 import PageTransition from '../components/PageTransition'
-import PrimaryButton from '../components/PrimaryButton'
 import ProfileChoiceGroup from '../components/ProfileChoiceGroup'
 import ProgressIndicator from '../components/ProgressIndicator'
 import useExperience from '../context/useExperience'
@@ -10,19 +9,44 @@ import {
   artFamiliarityOptions,
 } from '../data/profileOptions'
 import useTranslation from '../i18n/useTranslation'
+import {
+  PHONE_PROFILE_STEPS,
+  createCompletePhoneProfile,
+  getInitialPhoneProfileStep,
+  goBackToPhoneProfileAge,
+  selectPhoneProfileAge,
+} from '../profile/phoneProfileFlow'
 
-function ProfilePage({ onBack, onContinue, onProfileChanged }) {
+function ProfilePage({ onBack, onContinue }) {
   const { session, setAgeRange, setArtFamiliarity } = useExperience()
   const { t, isRtl } = useTranslation()
+  const [profileStep, setProfileStep] = useState(() =>
+    getInitialPhoneProfileStep(session),
+  )
+  const [selectedAgeRange, setSelectedAgeRange] = useState(
+    session.ageRange,
+  )
+  const [
+    selectedArtFamiliarity,
+    setSelectedArtFamiliarity,
+  ] = useState(session.artFamiliarity)
   const [isContinuing, setIsContinuing] = useState(false)
   const [hasError, setHasError] = useState(false)
   const continueLock = useRef(false)
-  const isProfileComplete = Boolean(
-    session.ageRange && session.artFamiliarity,
-  )
+  const isAgeStep = profileStep === PHONE_PROFILE_STEPS.age
+  const isFamiliarityStep =
+    profileStep === PHONE_PROFILE_STEPS.familiarity
 
-  const handleContinue = () => {
-    if (!isProfileComplete || continueLock.current) {
+  useEffect(() => {
+    setSelectedAgeRange(session.ageRange)
+  }, [session.ageRange])
+
+  useEffect(() => {
+    setSelectedArtFamiliarity(session.artFamiliarity)
+  }, [session.artFamiliarity])
+
+  const submitCompleteProfile = (profile) => {
+    if (!profile || continueLock.current) {
       return
     }
 
@@ -30,7 +54,7 @@ function ProfilePage({ onBack, onContinue, onProfileChanged }) {
     setIsContinuing(true)
     setHasError(false)
 
-    Promise.resolve(onContinue()).catch(() => {
+    Promise.resolve(onContinue(profile)).catch(() => {
       continueLock.current = false
       setIsContinuing(false)
       setHasError(true)
@@ -38,19 +62,46 @@ function ProfilePage({ onBack, onContinue, onProfileChanged }) {
   }
 
   const handleAgeRangeChange = (ageRange) => {
-    setAgeRange(ageRange)
-    onProfileChanged({
+    const nextState = selectPhoneProfileAge(
+      {
+        ageRange: selectedAgeRange,
+        artFamiliarity: selectedArtFamiliarity,
+        step: profileStep,
+      },
       ageRange,
-      artFamiliarity: session.artFamiliarity,
-    })
+    )
+
+    setSelectedAgeRange(nextState.ageRange)
+    setProfileStep(nextState.step)
+    setHasError(false)
+    setAgeRange(ageRange)
   }
 
   const handleArtFamiliarityChange = (artFamiliarity) => {
-    setArtFamiliarity(artFamiliarity)
-    onProfileChanged({
-      ageRange: session.ageRange,
+    const completeProfile = createCompletePhoneProfile({
+      ageRange: selectedAgeRange,
       artFamiliarity,
     })
+
+    if (!completeProfile) {
+      setProfileStep(PHONE_PROFILE_STEPS.age)
+      return
+    }
+
+    setSelectedArtFamiliarity(artFamiliarity)
+    setArtFamiliarity(artFamiliarity)
+    submitCompleteProfile(completeProfile)
+  }
+
+  const handleStepBack = () => {
+    const nextState = goBackToPhoneProfileAge({
+      ageRange: selectedAgeRange,
+      artFamiliarity: selectedArtFamiliarity,
+      step: profileStep,
+    })
+
+    setProfileStep(nextState.step)
+    setHasError(false)
   }
 
   return (
@@ -79,57 +130,71 @@ function ProfilePage({ onBack, onContinue, onProfileChanged }) {
         <ProgressIndicator current={2} total={10} />
       </header>
 
-      <main className="profile-page__content" aria-busy={isContinuing}>
+      <main
+        className="profile-page__content profile-page__content--stepped"
+        aria-busy={isContinuing}
+      >
         <div className="profile-page__heading">
           <p className="section-kicker">
             <span aria-hidden="true" />
             {t('profile.step')}
           </p>
           <h1>{t('profile.title')}</h1>
-          <p>{t('profile.description')}</p>
         </div>
 
-        <div className="profile-page__sections">
-          <ProfileChoiceGroup
-            groupNumber="01"
-            name="age-range"
-            title={t('profile.ageTitle')}
-            options={ageRangeOptions.map((option) => ({
-              ...option,
-              label: t(option.labelKey),
-            }))}
-            value={session.ageRange}
-            onChange={handleAgeRangeChange}
-            variant="age"
-          />
+        <div className="profile-page__sections profile-page__sections--single">
+          {isAgeStep ? (
+            <ProfileChoiceGroup
+              groupNumber="01"
+              name="age-range"
+              title={t('profile.ageTitle')}
+              options={ageRangeOptions.map((option) => ({
+                ...option,
+                label: t(option.labelKey),
+              }))}
+              value={selectedAgeRange}
+              onChange={handleAgeRangeChange}
+              variant="age"
+              disabled={isContinuing}
+            />
+          ) : null}
 
-          <ProfileChoiceGroup
-            groupNumber="02"
-            name="art-familiarity"
-            title={t('profile.familiarityTitle')}
-            options={artFamiliarityOptions.map((option) => ({
-              ...option,
-              label: t(option.labelKey),
-            }))}
-            value={session.artFamiliarity}
-            onChange={handleArtFamiliarityChange}
-            variant="familiarity"
-          />
+          {isFamiliarityStep ? (
+            <ProfileChoiceGroup
+              groupNumber="02"
+              name="art-familiarity"
+              title={t('profile.familiarityTitle')}
+              options={artFamiliarityOptions.map((option) => ({
+                ...option,
+                label: t(option.labelKey),
+              }))}
+              value={selectedArtFamiliarity}
+              onChange={handleArtFamiliarityChange}
+              variant="familiarity"
+              disabled={isContinuing}
+            />
+          ) : null}
         </div>
 
-        <div className="profile-page__action">
-          <PrimaryButton
-            disabled={!isProfileComplete || isContinuing}
-            onClick={handleContinue}
-          >
-            {t('common.continue')}
-          </PrimaryButton>
+        <div className="profile-page__action profile-page__action--stepped">
+          {isFamiliarityStep ? (
+            <button
+              className="profile-step-back"
+              type="button"
+              disabled={isContinuing}
+              onClick={handleStepBack}
+            >
+              <span aria-hidden="true">{isRtl ? '→' : '←'}</span>
+              <span>{t('common.back')}</span>
+            </button>
+          ) : null}
+
           <p aria-live="polite">
             {hasError
               ? t('sync.networkError')
-              : isProfileComplete
+              : isContinuing
               ? t('profile.statusComplete')
-              : t('profile.statusIncomplete')}
+              : '\u00a0'}
           </p>
         </div>
       </main>

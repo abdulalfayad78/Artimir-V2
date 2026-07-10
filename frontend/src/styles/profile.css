@@ -49,10 +49,18 @@
   line-height: 1.65;
 }
 
+.profile-page__content--stepped {
+  width: min(100%, 58rem);
+}
+
 .profile-page__sections {
   display: grid;
   gap: clamp(1.5rem, 3vh, 2.25rem);
   margin-top: clamp(1.8rem, 4vh, 3rem);
+}
+
+.profile-page__sections--single {
+  gap: 0;
 }
 
 .profile-choice-group {
@@ -249,6 +257,52 @@
   text-align: right;
 }
 
+.profile-page__action--stepped {
+  justify-content: space-between;
+}
+
+.profile-step-back {
+  display: inline-flex;
+  min-height: 2.75rem;
+  align-items: center;
+  justify-content: center;
+  gap: 0.45rem;
+  padding: 0.75rem 1rem;
+  border: 1px solid var(--color-border-soft);
+  border-radius: 999px;
+  color: var(--color-white);
+  background: rgba(255, 255, 255, 0.045);
+  font: inherit;
+  font-size: 0.72rem;
+  font-weight: 750;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition:
+    border-color var(--transition-fast),
+    color var(--transition-fast),
+    background var(--transition-fast),
+    box-shadow var(--transition-fast);
+}
+
+.profile-step-back:hover:not(:disabled),
+.profile-step-back:focus-visible {
+  border-color: rgba(255, 212, 0, 0.55);
+  color: var(--color-yellow-light);
+  background: rgba(255, 212, 0, 0.06);
+  box-shadow: 0 0 1.4rem rgba(255, 212, 0, 0.12);
+}
+
+.profile-step-back:focus-visible {
+  outline: 2px solid var(--color-yellow);
+  outline-offset: 0.2rem;
+}
+
+.profile-step-back:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
 @media (max-width: 80rem) {
   .profile-choice-grid--age {
     grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -273,7 +327,15 @@
   }
 
   .profile-page__content {
-    padding: 2.2rem 0 1.6rem;
+    padding: 1.65rem 0 1.2rem;
+  }
+
+  .profile-page__heading h1 {
+    font-size: clamp(2.1rem, 10.5vw, 3.35rem);
+  }
+
+  .profile-page__sections {
+    margin-top: 1.35rem;
   }
 
   .profile-page__action {
@@ -298,7 +360,20 @@
   }
 
   .profile-choice__surface {
-    min-height: 4.75rem;
+    min-height: 3.65rem;
+    padding: 0.72rem 0.85rem 0.72rem 0.95rem;
+  }
+
+  .profile-choice-grid {
+    gap: 0.5rem;
+  }
+
+  .profile-choice-group__legend {
+    margin-bottom: 0.65rem;
+  }
+
+  .profile-page__action--stepped {
+    gap: 0.85rem;
   }
 }
 

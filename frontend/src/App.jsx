@@ -672,14 +672,13 @@ function ExperienceRouter() {
                 onBack={() =>
                   phoneNavigate(routes.phoneLanguages)
                 }
-                onProfileChanged={(profile) => {
-                  notifyProfile(profile).catch(() => {})
-                }}
-                onContinue={async () => {
-                  await notifyProfile({
-                    ageRange: session.ageRange,
-                    artFamiliarity: session.artFamiliarity,
-                  })
+                onContinue={async (profile) => {
+                  await notifyProfile(
+                    profile ?? {
+                      ageRange: session.ageRange,
+                      artFamiliarity: session.artFamiliarity,
+                    },
+                  )
                   phoneNavigate(routes.phoneCustomization)
                 }}
               />

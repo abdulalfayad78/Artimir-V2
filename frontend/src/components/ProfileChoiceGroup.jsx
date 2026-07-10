@@ -6,6 +6,7 @@ function ProfileChoiceGroup({
   value,
   onChange,
   variant,
+  disabled = false,
 }) {
   return (
     <fieldset className="profile-choice-group">
@@ -30,6 +31,7 @@ function ProfileChoiceGroup({
                 name={name}
                 value={option.value}
                 checked={isSelected}
+                disabled={disabled}
                 onChange={() => onChange(option.value)}
               />
               <span
