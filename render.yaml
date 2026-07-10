@@ -17,13 +17,23 @@ services:
     name: artimir-api
     runtime: node
     plan: free
-    buildCommand: npm ci
+    buildCommand: npm ci && npm --prefix frontend ci && npm run build
     startCommand: npm run start:server
     healthCheckPath: /health
     envVars:
       - key: NODE_ENV
         value: production
       - key: PUBLIC_APP_ORIGIN
-        value: https://artimir-app.onrender.com
+        value: https://artimir-api.onrender.com
+      - key: PUBLIC_PHONE_BASE_URL
+        value: https://artimir-api.onrender.com
+      - key: VITE_SOCKET_URL
+        value: https://artimir-api.onrender.com
+      - key: VITE_PUBLIC_APP_URL
+        value: https://artimir-api.onrender.com
+      - key: VITE_PUBLIC_PHONE_BASE_URL
+        value: https://artimir-api.onrender.com
+      - key: VITE_MOTOR_SERVICE_URL
+        value: http://127.0.0.1:8000
       - key: DEVICE_SECRET
         sync: false

@@ -167,6 +167,7 @@ function ExperienceRouter() {
     clearSession,
     joinSession,
     qrCodeDataUrl,
+    qrDiagnostics,
     remoteSession,
     role,
     sendSessionEvent,
@@ -587,6 +588,7 @@ function ExperienceRouter() {
           <DisplayWaitingPage
             bootstrapStatus={displayController.bootstrapStatus}
             qrCodeDataUrl={qrCodeDataUrl}
+            qrDiagnostics={qrDiagnostics}
             session={remoteSession}
             sessionError={
               sessionError ?? displayController.sessionError

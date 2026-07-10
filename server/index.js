@@ -1,4 +1,6 @@
 import http from 'node:http'
+import fs from 'node:fs'
+import { stat } from 'node:fs/promises'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { Server } from 'socket.io'
@@ -34,6 +36,84 @@ function getRequestPathname(request) {
   }
 }
 
+const currentFile = fileURLToPath(import.meta.url)
+const serverDir = path.dirname(currentFile)
+const projectRoot = path.resolve(serverDir, '..')
+const defaultStaticDir = path.resolve(projectRoot, 'frontend', 'dist')
+const contentTypes = new Map([
+  ['.css', 'text/css; charset=utf-8'],
+  ['.html', 'text/html; charset=utf-8'],
+  ['.ico', 'image/x-icon'],
+  ['.js', 'text/javascript; charset=utf-8'],
+  ['.json', 'application/json; charset=utf-8'],
+  ['.map', 'application/json; charset=utf-8'],
+  ['.png', 'image/png'],
+  ['.svg', 'image/svg+xml'],
+  ['.txt', 'text/plain; charset=utf-8'],
+  ['.wasm', 'application/wasm'],
+  ['.webp', 'image/webp'],
+])
+
+function sendJson(response, statusCode, payload, headers = {}) {
+  response.writeHead(statusCode, {
+    'Content-Type': 'application/json; charset=utf-8',
+    ...headers,
+  })
+  response.end(JSON.stringify(payload))
+}
+
+function isSocketIoRequest(pathname) {
+  return pathname === '/socket.io' || pathname.startsWith('/socket.io/')
+}
+
+function isSafeStaticPath(staticDir, pathname) {
+  let decodedPath = pathname
+
+  try {
+    decodedPath = decodeURIComponent(pathname)
+  } catch {
+    return null
+  }
+
+  const absolutePath = path.resolve(
+    staticDir,
+    decodedPath.replace(/^\/+/, ''),
+  )
+  const relativePath = path.relative(staticDir, absolutePath)
+
+  if (relativePath.startsWith('..') || path.isAbsolute(relativePath)) {
+    return null
+  }
+
+  return absolutePath
+}
+
+async function fileExists(filePath) {
+  try {
+    const fileStat = await stat(filePath)
+    return fileStat.isFile()
+  } catch {
+    return false
+  }
+}
+
+async function sendStaticFile(request, response, filePath) {
+  const extension = path.extname(filePath).toLowerCase()
+  const contentType =
+    contentTypes.get(extension) ?? 'application/octet-stream'
+
+  response.writeHead(200, {
+    'Content-Type': contentType,
+  })
+
+  if (request.method === 'HEAD') {
+    response.end()
+    return
+  }
+
+  fs.createReadStream(filePath).pipe(response)
+}
+
 function createArtimirServer(options = {}) {
   const port =
     options.port ??
@@ -59,6 +139,10 @@ function createArtimirServer(options = {}) {
   const publicAppOrigins =
     options.publicAppOrigins ??
     parseOriginList(process.env.PUBLIC_APP_ORIGIN)
+  const publicPhoneBaseUrl =
+    options.publicPhoneBaseUrl ??
+    process.env.PUBLIC_PHONE_BASE_URL ??
+    publicAppOrigins[0]
   const allowedOrigins =
     options.allowedOrigins ??
     createAllowedOrigins({
@@ -68,8 +152,10 @@ function createArtimirServer(options = {}) {
       publicAppOrigins,
     })
   const store = new SessionStore({ ttlMs: sessionTtlMs })
+  const staticDir = options.staticDir ?? defaultStaticDir
+  const staticIndexPath = path.join(staticDir, 'index.html')
 
-  const httpServer = http.createServer((request, response) => {
+  const httpServer = http.createServer(async (request, response) => {
     const pathname = getRequestPathname(request)
 
     if (
@@ -77,30 +163,50 @@ function createArtimirServer(options = {}) {
       (pathname === '/health' || pathname === '/health/')
     ) {
       const requestOrigin = normalizeOrigin(request.headers.origin)
-      const headers = {
-        'Content-Type': 'application/json; charset=utf-8',
-      }
+      const headers = {}
 
       if (requestOrigin && allowedOrigins.has(requestOrigin)) {
         headers['Access-Control-Allow-Origin'] = requestOrigin
       }
 
-      response.writeHead(200, {
-        ...headers,
-      })
-      response.end(
-        JSON.stringify({
+      sendJson(
+        response,
+        200,
+        {
           status: 'ok',
           service: 'artimir-realtime',
-        }),
+        },
+        headers,
       )
       return
     }
 
-    response.writeHead(404, {
-      'Content-Type': 'application/json; charset=utf-8',
-    })
-    response.end(JSON.stringify({ error: 'NOT_FOUND' }))
+    if (
+      isSocketIoRequest(pathname) ||
+      !['GET', 'HEAD'].includes(request.method)
+    ) {
+      sendJson(response, 404, { error: 'NOT_FOUND' })
+      return
+    }
+
+    const staticPath = isSafeStaticPath(staticDir, pathname)
+    const requestedFilePath =
+      staticPath && pathname !== '/' ? staticPath : null
+
+    if (
+      requestedFilePath &&
+      (await fileExists(requestedFilePath))
+    ) {
+      await sendStaticFile(request, response, requestedFilePath)
+      return
+    }
+
+    if (await fileExists(staticIndexPath)) {
+      await sendStaticFile(request, response, staticIndexPath)
+      return
+    }
+
+    sendJson(response, 404, { error: 'NOT_FOUND' })
   })
 
   const io = new Server(httpServer, {
@@ -116,6 +222,7 @@ function createArtimirServer(options = {}) {
     serverPort: port,
     clientProtocol,
     localAddress,
+    publicPhoneBaseUrl,
     publicAppOrigin: publicAppOrigins[0],
   })
 
@@ -183,6 +290,7 @@ function createArtimirServer(options = {}) {
       localAddress,
       port,
       publicAppOrigins,
+      staticDir,
       sessionTtlMs,
     },
   }
@@ -209,7 +317,6 @@ async function startFromCommandLine() {
   )
 }
 
-const currentFile = fileURLToPath(import.meta.url)
 const launchedFile = process.argv[1]
   ? path.resolve(process.argv[1])
   : null

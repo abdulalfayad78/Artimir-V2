@@ -37,6 +37,7 @@ test('phone and display complete the synchronized positioning handoff', async (t
   const server = createArtimirServer({
     port: 0,
     localAddress: '127.0.0.1',
+    publicPhoneBaseUrl: 'https://app.artimir.fr',
     sessionTtlMs: 30_000,
   })
   const address = await server.listen()
@@ -253,6 +254,7 @@ test('display session creation can return a public phone URL for the QR code', a
   const server = createArtimirServer({
     port: 0,
     localAddress: '127.0.0.1',
+    publicPhoneBaseUrl: 'https://configured.artimir.fr',
   })
   const address = await server.listen()
   const socket = await connectClient(
@@ -281,6 +283,43 @@ test('display session creation can return a public phone URL for the QR code', a
     `https://app.artimir.fr/#/phone/languages?session=${response.session.id}`,
   )
   assert.match(response.qrCodeDataUrl, /^data:image\/png;base64,/)
+})
+
+test('display session creation reports a clear QR error without public phone URL', async (t) => {
+  const server = createArtimirServer({
+    port: 0,
+    localAddress: '10.200.20.38',
+    publicPhoneBaseUrl: '',
+    publicAppOrigins: [],
+  })
+  const address = await server.listen()
+  const socket = await connectClient(
+    `http://127.0.0.1:${address.port}`,
+  )
+
+  t.after(async () => {
+    socket.disconnect()
+    await server.close()
+  })
+
+  const response = await emitAck(
+    socket,
+    SOCKET_EVENTS.sessionCreate,
+    null,
+    {
+      role: CLIENT_ROLES.display,
+      clientId: 'display-missing-public-phone-url',
+    },
+  )
+
+  assert.equal(response.ok, true)
+  assert.equal(response.phoneUrl, null)
+  assert.equal(response.qrCodeDataUrl, null)
+  assert.equal(response.qrMode, 'unconfigured')
+  assert.equal(
+    response.qrError,
+    'URL publique téléphone non configurée',
+  )
 })
 
 test('the original phone client can reconnect without opening a second slot', async (t) => {

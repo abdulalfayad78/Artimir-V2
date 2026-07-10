@@ -44,6 +44,44 @@ function createSocketError(code, message = code) {
   }
 }
 
+async function createPhonePairing({
+  localAddress,
+  clientPort,
+  serverPort,
+  clientProtocol,
+  publicAppOrigin,
+  sessionId,
+}) {
+  const urls = createNetworkUrls({
+    localAddress,
+    clientPort,
+    serverPort,
+    clientProtocol,
+    publicAppOrigin,
+    sessionId,
+  })
+  const qrCodeDataUrl = urls.phoneUrl
+    ? await createPhoneQrCode(urls.phoneUrl)
+    : null
+
+  if (urls.phoneUrlError) {
+    logServerSession('qr:phone-url-missing', {
+      sessionCode: sessionId,
+      message: urls.phoneUrlError,
+      qrMode: urls.qrMode,
+    })
+  }
+
+  return {
+    phoneUrl: urls.phoneUrl,
+    phoneBaseUrl: urls.phoneBaseUrl,
+    qrUrl: urls.phoneUrl,
+    qrMode: urls.qrMode,
+    qrError: urls.phoneUrlError,
+    qrCodeDataUrl,
+  }
+}
+
 function registerSocketHandlers(
   io,
   store,
@@ -52,6 +90,7 @@ function registerSocketHandlers(
     serverPort = 3001,
     clientProtocol = 'http',
     localAddress,
+    publicPhoneBaseUrl,
     publicAppOrigin,
   } = {},
 ) {
@@ -220,21 +259,22 @@ function registerSocketHandlers(
         socket.data.clientId = payload.clientId
         await socket.join(roomName(session.id))
 
-        const urls = createNetworkUrls({
+        const pairing = await createPhonePairing({
           localAddress,
           clientPort,
           serverPort,
           clientProtocol,
           publicAppOrigin:
-            payload.publicAppUrl ?? publicAppOrigin,
+            payload.publicPhoneBaseUrl ??
+            payload.publicAppUrl ??
+            publicPhoneBaseUrl ??
+            publicAppOrigin,
           sessionId: session.id,
         })
-        const qrCodeDataUrl = await createPhoneQrCode(urls.phoneUrl)
         const response = {
           ok: true,
           session: toPublicSession(session),
-          phoneUrl: urls.phoneUrl,
-          qrCodeDataUrl,
+          ...pairing,
         }
 
         socket.emit(
@@ -389,18 +429,14 @@ function registerSocketHandlers(
         let pairing = {}
 
         if (role === CLIENT_ROLES.display) {
-          const urls = createNetworkUrls({
+          pairing = await createPhonePairing({
             localAddress,
             clientPort,
             serverPort,
             clientProtocol,
-            publicAppOrigin,
+            publicAppOrigin: publicPhoneBaseUrl ?? publicAppOrigin,
             sessionId,
           })
-          pairing = {
-            phoneUrl: urls.phoneUrl,
-            qrCodeDataUrl: await createPhoneQrCode(urls.phoneUrl),
-          }
         }
 
         const response = {

@@ -13,6 +13,45 @@ function normalizePublicAppOrigin(value) {
   }
 }
 
+function isPrivateIPv4(hostname) {
+  const parts = hostname.split('.').map((part) => Number.parseInt(part, 10))
+
+  if (
+    parts.length !== 4 ||
+    parts.some((part) => !Number.isInteger(part) || part < 0 || part > 255)
+  ) {
+    return false
+  }
+
+  return (
+    parts[0] === 10 ||
+    parts[0] === 127 ||
+    (parts[0] === 192 && parts[1] === 168) ||
+    (parts[0] === 172 && parts[1] >= 16 && parts[1] <= 31)
+  )
+}
+
+function normalizePublicPhoneOrigin(value) {
+  const origin = normalizePublicAppOrigin(value)
+
+  if (!origin) {
+    return null
+  }
+
+  const url = new URL(origin)
+  const hostname = url.hostname.toLowerCase()
+  const isLocalHostname =
+    hostname === 'localhost' ||
+    hostname.endsWith('.localhost') ||
+    hostname === '0.0.0.0'
+
+  if (url.protocol !== 'https:' || isLocalHostname || isPrivateIPv4(hostname)) {
+    return null
+  }
+
+  return origin
+}
+
 function getLocalIPv4() {
   const candidates = []
 
@@ -51,19 +90,25 @@ function createNetworkUrls({
   sessionId,
 } = {}) {
   const clientOrigin = `${clientProtocol}://${localAddress}:${clientPort}`
-  const phoneOrigin =
-    normalizePublicAppOrigin(publicAppOrigin) ?? clientOrigin
+  const phoneOrigin = normalizePublicPhoneOrigin(publicAppOrigin)
   const sessionQuery = sessionId
     ? `?session=${encodeURIComponent(sessionId)}`
     : ''
+  const phoneUrl = sessionId && phoneOrigin
+    ? `${phoneOrigin}/#/phone/languages${sessionQuery}`
+    : null
+  const phoneUrlError = sessionId && !phoneOrigin
+    ? 'URL publique téléphone non configurée'
+    : null
 
   return {
     localAddress,
     displayLocalUrl: `http://localhost:${clientPort}/#/display`,
     displayNetworkUrl: `${clientOrigin}/#/display`,
-    phoneUrl: sessionId
-      ? `${phoneOrigin}/#/phone/languages${sessionQuery}`
-      : null,
+    phoneBaseUrl: phoneOrigin,
+    phoneUrl,
+    phoneUrlError,
+    qrMode: phoneOrigin ? 'public' : 'unconfigured',
     socketUrl: `http://${localAddress}:${serverPort}`,
   }
 }
@@ -85,4 +130,5 @@ export {
   createPhoneQrCode,
   getLocalIPv4,
   normalizePublicAppOrigin,
+  normalizePublicPhoneOrigin,
 }

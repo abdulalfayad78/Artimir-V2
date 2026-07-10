@@ -3,8 +3,10 @@ import test from 'node:test'
 import heightAdjustmentConfig from '../frontend/src/config/heightAdjustmentConfig.js'
 import {
   getPublicAppUrl,
+  getPublicPhoneBaseUrl,
   getMotorServiceUrl,
   getSocketUrl,
+  normalizePublicPhoneOrigin,
   normalizeRuntimeOrigin,
 } from '../frontend/src/realtime/runtimeUrls.js'
 
@@ -52,6 +54,50 @@ test('public app URL falls back to the current browser origin', () => {
     }),
     'http://192.168.1.40:5173',
   )
+})
+
+test('public phone base URL uses the explicit public HTTPS origin only', () => {
+  assert.equal(
+    getPublicPhoneBaseUrl({
+      env: {
+        VITE_PUBLIC_PHONE_BASE_URL: 'https://phone.artimir.fr/',
+        VITE_PUBLIC_APP_URL: 'https://app.artimir.fr',
+      },
+    }),
+    'https://phone.artimir.fr',
+  )
+  assert.equal(
+    getPublicPhoneBaseUrl({
+      env: { VITE_PUBLIC_APP_URL: 'https://app.artimir.fr/' },
+    }),
+    'https://app.artimir.fr',
+  )
+  assert.equal(
+    getPublicPhoneBaseUrl({
+      env: {},
+      location: localLocation,
+    }),
+    null,
+  )
+})
+
+test('public phone base URL refuses localhost and private network origins', () => {
+  for (const value of [
+    'http://localhost:5173',
+    'http://127.0.0.1:5173',
+    'http://192.168.1.20:5173',
+    'http://10.200.20.38:5173',
+    'https://localhost',
+    'https://127.0.0.1',
+    'https://192.168.1.20',
+    'https://10.200.20.38',
+  ]) {
+    assert.equal(
+      normalizePublicPhoneOrigin(value),
+      null,
+      `expected ${value} to be rejected`,
+    )
+  }
 })
 
 test('runtime URL normalization only trims surrounding and trailing slashes', () => {

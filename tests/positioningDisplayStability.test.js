@@ -83,15 +83,15 @@ function createStableGuidance() {
   return { aggregator, guidanceFace, state }
 }
 
-test('one face_not_detected frame blocks internally without a visible flash', () => {
+test('one face_not_detected frame is retained without a visible flash', () => {
   const { aggregator, state } = createStableGuidance()
   const lost = aggregator.update(result(2050, []))
 
   assert.equal(
-    lost.rawBlockingState,
-    positioningInstructions.faceNotDetected,
+    lost.rawInstruction,
+    positioningInstructions.moveLeft,
   )
-  assert.equal(lost.stableProgress, 0)
+  assert.equal(lost.cameras.top.retainedDuringDetectionGrace, true)
   assert.equal(lost.positionCorrect, false)
   assert.equal(
     lost.displayedInstruction,
@@ -99,11 +99,11 @@ test('one face_not_detected frame blocks internally without a visible flash', ()
   )
 })
 
-test('persistent face absence is displayed after 200 ms', () => {
+test('persistent face absence is displayed after retention and confirmation', () => {
   const { aggregator } = createStableGuidance()
   let state
 
-  for (let timestamp = 2050; timestamp <= 2300; timestamp += 50) {
+  for (let timestamp = 2050; timestamp <= 2700; timestamp += 50) {
     state = aggregator.update(result(timestamp, []))
   }
 
@@ -181,7 +181,7 @@ test('an abrupt center change returns to reacquiring', () => {
     state.rawInstruction,
     positioningInstructions.reacquiring,
   )
-  assert.equal(state.cameras.top.confirmedPrimaryFace, null)
+  assert.equal(state.positionCorrect, false)
 })
 
 test('an abrupt size change returns to reacquiring', () => {
@@ -195,7 +195,7 @@ test('an abrupt size change returns to reacquiring', () => {
     state.rawInstruction,
     positioningInstructions.reacquiring,
   )
-  assert.equal(state.cameras.top.confirmedPrimaryFace, null)
+  assert.equal(state.positionCorrect, false)
 })
 
 test('an excessively flat bounding box is rejected', () => {
@@ -211,11 +211,11 @@ test('an excessively flat bounding box is rejected', () => {
   )
 })
 
-test('a displayed instruction is retained for at least 500 ms', () => {
+test('a displayed instruction is retained for at least the configured minimum', () => {
   const { aggregator } = createStableGuidance()
   let state
 
-  for (let timestamp = 2050; timestamp < 2650; timestamp += 50) {
+  for (let timestamp = 2050; timestamp < 3000; timestamp += 50) {
     state = aggregator.update(
       result(timestamp, [face({ centerX: 0.6 })]),
     )
@@ -226,7 +226,7 @@ test('a displayed instruction is retained for at least 500 ms', () => {
     positioningInstructions.moveRight,
   )
   state = aggregator.update(
-    result(2650, [face({ centerX: 0.6 })]),
+    result(3000, [face({ centerX: 0.6 })]),
   )
   assert.equal(
     state.displayedInstruction,

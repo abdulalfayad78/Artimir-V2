@@ -180,6 +180,18 @@ function PositioningDiagnostics({
           reset:{' '}
           <strong>{globalState.progressResetReason ?? '—'}</strong>
         </span>
+        <span>
+          inference last:{' '}
+          <strong>
+            {formatMetric(performanceInfo.lastInferenceDurationMs, 1)} ms
+          </strong>
+        </span>
+        <span>
+          inference avg:{' '}
+          <strong>
+            {formatMetric(performanceInfo.averageInferenceDurationMs, 1)} ms
+          </strong>
+        </span>
       </div>
 
       <div className="positioning-diagnostics__cameras">
@@ -222,6 +234,9 @@ function PositioningDiagnostics({
               <div><dt>yaw</dt><dd>{formatMetric(camera.yaw, 1)}°</dd></div>
               <div><dt>pitch</dt><dd>{formatMetric(camera.pitch, 1)}°</dd></div>
               <div><dt>stability</dt><dd>{formatMetric(camera.stability, 2)}</dd></div>
+              <div><dt>data quality</dt><dd>{camera.dataQuality ?? '—'}</dd></div>
+              <div><dt>retained short loss</dt><dd>{String(camera.retainedDuringDetectionGrace ?? false)}</dd></div>
+              <div><dt>loss duration</dt><dd>{camera.lostDetectionDurationMs ?? '—'} ms</dd></div>
               <div><dt>age</dt><dd>{camera.dataAgeMs ?? '—'} ms</dd></div>
               <div><dt>mapping</dt><dd>{String(camera.usableForMapping)}</dd></div>
               <div><dt>blocking</dt><dd>{camera.blockingReason ?? '—'}</dd></div>

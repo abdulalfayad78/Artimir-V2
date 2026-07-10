@@ -221,6 +221,37 @@
   letter-spacing: 0.2em;
 }
 
+.display-waiting-page__qr-debug {
+  display: grid;
+  width: min(100%, 22rem);
+  gap: 0.35rem;
+  margin: 1rem 0 0;
+  padding: 0.75rem;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 0.75rem;
+  background: rgba(255, 255, 255, 0.035);
+  color: rgba(245, 245, 245, 0.72);
+  font-size: 0.62rem;
+  text-align: start;
+}
+
+.display-waiting-page__qr-debug div {
+  display: grid;
+  gap: 0.15rem;
+}
+
+.display-waiting-page__qr-debug dt {
+  color: var(--color-grey);
+  font-weight: 750;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.display-waiting-page__qr-debug dd {
+  overflow-wrap: anywhere;
+  margin: 0;
+}
+
 .handoff-page {
   display: grid;
   min-height: 100svh;

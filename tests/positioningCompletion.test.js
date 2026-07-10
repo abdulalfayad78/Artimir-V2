@@ -180,5 +180,5 @@ test('POSITIONING_COMPLETED routes the display to height-adjustment', () => {
     ),
     routes.displayHeightAdjustment,
   )
-  assert.equal(positioningConfig.filtering.stableDurationMs, 3000)
+  assert.equal(positioningConfig.filtering.stableDurationMs, 1200)
 })

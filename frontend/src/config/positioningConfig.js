@@ -1,9 +1,9 @@
 const cameraIds = Object.freeze(['top', 'bottom', 'left', 'right'])
 
 const primaryThresholds = Object.freeze({
-  minDetectionConfidence: 0.85,
-  horizontalTolerance: 0.05,
-  verticalTolerance: 0.06,
+  minDetectionConfidence: 0.78,
+  horizontalTolerance: 0.065,
+  verticalTolerance: 0.075,
   minFaceWidthRatio: 0.16,
   maxFaceWidthRatio: 0.28,
   /*
@@ -14,12 +14,12 @@ const primaryThresholds = Object.freeze({
    * hysteresis because camera focal lengths can differ.
    */
   distanceHysteresisMargin: 0.01,
-  maxRollDegrees: 5,
-  maxYawDegrees: 8,
-  maxPitchDegrees: 8,
-  maxCenterMovementRatio: 0.015,
-  maxSizeVariationRatio: 0.02,
-  maxAngleVariationDegrees: 1.75,
+  maxRollDegrees: 7,
+  maxYawDegrees: 10,
+  maxPitchDegrees: 10,
+  maxCenterMovementRatio: 0.024,
+  maxSizeVariationRatio: 0.032,
+  maxAngleVariationDegrees: 2.6,
   edgeMarginRatio: 0.025,
 })
 
@@ -82,27 +82,29 @@ const positioningConfig = Object.freeze({
     maxFaces: 2,
     minDetectionConfidence:
       primaryThresholds.minDetectionConfidence,
-    minFacePresenceConfidence: 0.85,
-    minTrackingConfidence: 0.85,
+    minFacePresenceConfidence: 0.78,
+    minTrackingConfidence: 0.78,
   }),
   analysis: Object.freeze({
     fps: 20,
     intervalMs: 50,
-    maxDataAgeMs: 200,
-    noFaceRetentionMs: 0,
+    maxDataAgeMs: 450,
+    noFaceRetentionMs: 350,
   }),
   filtering: Object.freeze({
     smoothingFactor: 0.28,
+    historySize: 7,
     hysteresisRatio: 0.18,
-    minimumValidMeasurements: 20,
-    stableDurationMs: 3000,
+    minimumValidMeasurements: 10,
+    stableDurationMs: 1200,
     criticalDisplayConfirmSamples: 2,
     criticalDisplayConfirmMs: 150,
     multipleFacesDisplayConfirmMs: 200,
     noFaceDisplayConfirmMs: 200,
     nonCriticalDisplayConfirmSamples: 4,
     nonCriticalDisplayConfirmMs: 500,
-    minimumDisplayedInstructionMs: 500,
+    minimumDisplayedInstructionMs: 650,
+    uiUpdateIntervalMs: 80,
   }),
   poseConvention: Object.freeze({
     /*

@@ -22,6 +22,7 @@ const displayStatusKeys = {
 function DisplayWaitingPage({
   bootstrapStatus,
   qrCodeDataUrl,
+  qrDiagnostics,
   session,
   sessionError,
 }) {
@@ -76,6 +77,26 @@ function DisplayWaitingPage({
           </div>
           <p>{t('displayWaiting.sessionCode')}</p>
           <strong>{session?.id ?? '------'}</strong>
+          <dl className="display-waiting-page__qr-debug">
+            <div>
+              <dt>phoneBaseUrl</dt>
+              <dd>{qrDiagnostics?.phoneBaseUrl ?? '—'}</dd>
+            </div>
+            <div>
+              <dt>qrUrl</dt>
+              <dd>{qrDiagnostics?.qrUrl ?? '—'}</dd>
+            </div>
+            <div>
+              <dt>mode QR</dt>
+              <dd>{qrDiagnostics?.qrMode ?? 'unconfigured'}</dd>
+            </div>
+            {qrDiagnostics?.error && (
+              <div>
+                <dt>erreur</dt>
+                <dd>{qrDiagnostics.error}</dd>
+              </div>
+            )}
+          </dl>
         </section>
       </main>
     </PageTransition>

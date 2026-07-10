@@ -121,6 +121,9 @@ async function createMediaPipeFaceSource({
   let cancelMetadataWait = null
   let analysisCount = 0
   let firstAnalysisAt = null
+  let inferenceInProgress = false
+  let lastInferenceDurationMs = 0
+  let totalInferenceDurationMs = 0
 
   const scheduleNextDetection = () => {
     if (!stopped && !disposed && timeoutId === null) {
@@ -138,6 +141,11 @@ async function createMediaPipeFaceSource({
       return
     }
 
+    if (inferenceInProgress) {
+      scheduleNextDetection()
+      return
+    }
+
     try {
       if (
         videoElement.readyState <
@@ -150,10 +158,17 @@ async function createMediaPipeFaceSource({
 
       lastVideoTime = videoElement.currentTime
       const timestamp = performance.now()
+      inferenceInProgress = true
       const result = landmarker.detectForVideo(
         videoElement,
         timestamp,
       )
+      lastInferenceDurationMs = Math.max(
+        0,
+        performance.now() - timestamp,
+      )
+      totalInferenceDurationMs += lastInferenceDurationMs
+      inferenceInProgress = false
 
       if (stopped || disposed) {
         return
@@ -185,6 +200,7 @@ async function createMediaPipeFaceSource({
       )
       scheduleNextDetection()
     } catch (error) {
+      inferenceInProgress = false
       stopped = true
 
       if (!disposed) {
@@ -252,6 +268,11 @@ async function createMediaPipeFaceSource({
       measuredFps:
         durationMs > 0 && analysisCount > 1
           ? ((analysisCount - 1) * 1000) / durationMs
+          : 0,
+      lastInferenceDurationMs,
+      averageInferenceDurationMs:
+        analysisCount > 0
+          ? totalInferenceDurationMs / analysisCount
           : 0,
     }
   }

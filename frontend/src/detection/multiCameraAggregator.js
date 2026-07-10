@@ -398,6 +398,16 @@ function getCandidateInstruction(
     return positioningInstructions.movementTooHigh
   }
 
+  if (
+    !topUsability.usable &&
+    [
+      'landmarks_incomplete',
+      'measurements_incomplete',
+    ].includes(topUsability.reason)
+  ) {
+    return positioningInstructions.reacquiring
+  }
+
   if (!topUsability.usable) {
     return positioningInstructions.secondaryBlocked
   }
@@ -674,6 +684,9 @@ function createMultiCameraAggregator(
   }
 
   const calculateState = (now, countMeasurement = false) => {
+    const staleResetAgeMs =
+      config.analysis.maxDataAgeMs +
+      config.analysis.noFaceRetentionMs
     const evaluatedCameras = Object.fromEntries(
       cameraIds.map((cameraId) => {
         const camera = cameras[cameraId]
@@ -682,6 +695,13 @@ function createMultiCameraAggregator(
           now,
           config.analysis.maxDataAgeMs,
         )
+        const dataAgeMs =
+          camera.timestamp > 0
+            ? Math.max(0, now - camera.timestamp)
+            : null
+        const staleLongEnoughToReset =
+          Number.isFinite(dataAgeMs) &&
+          dataAgeMs >= staleResetAgeMs
         const evaluation = evaluateCameraUsability(
           camera,
           config.cameraThresholds[cameraId],
@@ -697,7 +717,7 @@ function createMultiCameraAggregator(
               })
             : camera
 
-        if (camera.timestamp > 0 && !fresh) {
+        if (staleLongEnoughToReset) {
           filters[cameraId].reset()
           faceTrackers[cameraId].reset()
         }
@@ -706,10 +726,7 @@ function createMultiCameraAggregator(
           cameraId,
           {
             ...visibleCamera,
-            dataAgeMs:
-              camera.timestamp > 0
-                ? Math.max(0, now - camera.timestamp)
-                : null,
+            dataAgeMs,
             usableForMapping: evaluation.usable,
             blockingReason: evaluation.reason,
           },

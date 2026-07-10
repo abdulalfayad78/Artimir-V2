@@ -154,7 +154,7 @@ test('a sole face outside the ROI cannot become the primary face', () => {
   )
 })
 
-test('face loss during hold_still clears the instruction immediately', () => {
+test('brief face loss during hold_still is retained and persistent loss blocks', () => {
   const aggregator = createMultiCameraAggregator()
   const holding = runStable(aggregator, 1000, 1700)
 
@@ -167,14 +167,19 @@ test('face loss during hold_still clears the instruction immediately', () => {
 
   assert.equal(
     lost.rawInstruction,
-    positioningInstructions.faceNotDetected,
-  )
-  assert.equal(
-    lost.displayedInstruction,
     positioningInstructions.reacquiring,
   )
-  assert.equal(lost.stableProgress, 0)
-  assert.equal(lost.validMeasurementCount, 0)
+  assert.equal(lost.cameras.top.retainedDuringDetectionGrace, true)
+  assert.equal(lost.positionCorrect, false)
+
+  const persistentLoss = aggregator.update(detection(2150, []))
+
+  assert.equal(
+    persistentLoss.rawInstruction,
+    positioningInstructions.faceNotDetected,
+  )
+  assert.equal(persistentLoss.stableProgress, 0)
+  assert.equal(persistentLoss.validMeasurementCount, 0)
 })
 
 test('face loss during progress resets the progress immediately', () => {

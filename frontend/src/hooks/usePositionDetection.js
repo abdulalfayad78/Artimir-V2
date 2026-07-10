@@ -56,10 +56,13 @@ function usePositionDetection({
   const [performanceInfo, setPerformanceInfo] = useState({
     analysisCount: 0,
     measuredFps: 0,
+    lastInferenceDurationMs: 0,
+    averageInferenceDurationMs: 0,
   })
   const detectionSourceRef = useRef(null)
   const freshnessTimeoutRef = useRef(null)
   const completedRef = useRef(false)
+  const lastUiUpdateAtRef = useRef(0)
 
   const stopDetectionSource = useCallback(() => {
     if (freshnessTimeoutRef.current !== null) {
@@ -88,7 +91,10 @@ function usePositionDetection({
     setPerformanceInfo({
       analysisCount: 0,
       measuredFps: 0,
+      lastInferenceDurationMs: 0,
+      averageInferenceDurationMs: 0,
     })
+    lastUiUpdateAtRef.current = 0
   }, [applyGlobalState])
 
   const completeDetection = useCallback(
@@ -154,7 +160,19 @@ function usePositionDetection({
       if (completeOnPositionCorrect && nextState.positionCorrect) {
         completeDetection(nextState)
       } else {
-        applyGlobalState(nextState)
+        const elapsedSinceUiUpdate =
+          cameraResult.timestamp - lastUiUpdateAtRef.current
+        const shouldRefreshUi =
+          lastUiUpdateAtRef.current === 0 ||
+          elapsedSinceUiUpdate >=
+            positioningConfig.filtering.uiUpdateIntervalMs ||
+          nextState.rawBlockingState ||
+          nextState.positionCorrect
+
+        if (shouldRefreshUi) {
+          lastUiUpdateAtRef.current = cameraResult.timestamp
+          applyGlobalState(nextState)
+        }
       }
 
       if (nextPerformance) {

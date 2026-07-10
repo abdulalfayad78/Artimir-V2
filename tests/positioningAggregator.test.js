@@ -206,27 +206,27 @@ test('vertical center is used independently from horizontal center', () => {
 
 test('positive and negative pose angles produce coherent guidance', () => {
   assert.equal(
-    instructionFor({ roll: 7 }),
+    instructionFor({ roll: 9 }),
     positioningInstructions.straightenHead,
   )
   assert.equal(
-    instructionFor({ roll: -7 }),
+    instructionFor({ roll: -9 }),
     positioningInstructions.straightenHead,
   )
   assert.equal(
-    instructionFor({ yaw: 10 }),
+    instructionFor({ yaw: 12 }),
     positioningInstructions.lookForward,
   )
   assert.equal(
-    instructionFor({ yaw: -10 }),
+    instructionFor({ yaw: -12 }),
     positioningInstructions.lookForward,
   )
   assert.equal(
-    instructionFor({ pitch: 10 }),
+    instructionFor({ pitch: 12 }),
     positioningInstructions.raiseHead,
   )
   assert.equal(
-    instructionFor({ pitch: -10 }),
+    instructionFor({ pitch: -12 }),
     positioningInstructions.lowerHead,
   )
 })
@@ -257,18 +257,18 @@ test('stale data and a real face loss reset progress', () => {
   assert.equal(lostState.stableProgress, 0)
 })
 
-test('validation requires three continuous seconds and enough measurements', () => {
+test('validation requires the configured stable duration and enough measurements', () => {
   const aggregator = createMultiCameraAggregator()
   let state
 
-  for (let timestamp = 1000; timestamp < 5050; timestamp += 50) {
+  for (let timestamp = 1000; timestamp < 2800; timestamp += 50) {
     state = aggregator.update(validCameraResult('top', timestamp))
   }
 
   assert.equal(state.positionCorrect, false)
   assert.ok(state.stableProgress < 1)
 
-  state = aggregator.update(validCameraResult('top', 5050))
+  state = aggregator.update(validCameraResult('top', 2800))
   assert.equal(state.positionCorrect, true)
   assert.ok(
     state.validMeasurementCount >=
@@ -307,7 +307,7 @@ test('pose hysteresis prevents instruction flicker near a limit', () => {
 
   for (let index = 0; index < 18; index += 1) {
     state = aggregator.update(
-      validCameraResult('top', timestamp, { roll: 10 }),
+      validCameraResult('top', timestamp, { roll: 12 }),
     )
     timestamp += 50
   }
@@ -319,7 +319,7 @@ test('pose hysteresis prevents instruction flicker near a limit', () => {
 
   for (let index = 0; index < 18; index += 1) {
     state = aggregator.update(
-      validCameraResult('top', timestamp, { roll: 4.5 }),
+      validCameraResult('top', timestamp, { roll: 6 }),
     )
     timestamp += 50
   }

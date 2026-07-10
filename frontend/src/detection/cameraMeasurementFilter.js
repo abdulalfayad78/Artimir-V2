@@ -20,15 +20,43 @@ function smoothValue(previous, current, factor) {
   return previous * (1 - factor) + current * factor
 }
 
+function median(values) {
+  const finiteValues = values
+    .filter((value) => Number.isFinite(value))
+    .sort((first, second) => first - second)
+
+  if (finiteValues.length === 0) {
+    return null
+  }
+
+  const middle = Math.floor(finiteValues.length / 2)
+
+  return finiteValues.length % 2 === 0
+    ? (finiteValues[middle - 1] + finiteValues[middle]) / 2
+    : finiteValues[middle]
+}
+
+function isRetainableShortLoss(measurement) {
+  return (
+    measurement.totalFaceCount === 0 ||
+    (!measurement.faceDetected &&
+      measurement.relevantFaceCount <= 1) ||
+    (measurement.faceCount === 1 &&
+      !measurement.essentialLandmarksPresent)
+  )
+}
+
 function createCameraMeasurementFilter(config) {
   let previous = null
   let lossStartedAt = null
   let requiresBaseline = true
+  let history = []
 
   const reset = () => {
     previous = null
     lossStartedAt = null
     requiresBaseline = true
+    history = []
   }
 
   const update = (measurement, thresholds) => {
@@ -39,11 +67,31 @@ function createCameraMeasurementFilter(config) {
     ) {
       lossStartedAt ??= measurement.timestamp
 
+      const lostDurationMs = measurement.timestamp - lossStartedAt
+      const canRetainPreviousFace =
+        previous &&
+        isRetainableShortLoss(measurement) &&
+        lostDurationMs < config.analysis.noFaceRetentionMs
+
+      if (canRetainPreviousFace) {
+        return {
+          ...previous,
+          available: measurement.available,
+          simulated: measurement.simulated,
+          timestamp: measurement.timestamp,
+          rawFaceDetected: measurement.faceDetected,
+          retainedDuringDetectionGrace: true,
+          lostDetectionDurationMs: lostDurationMs,
+          lastValidDetectionAgeMs: lostDurationMs,
+          dataQuality: 'retained_short_loss',
+        }
+      }
+
       if (
-        measurement.timestamp - lossStartedAt >=
-        config.analysis.noFaceRetentionMs
+        lostDurationMs >= config.analysis.noFaceRetentionMs
       ) {
         previous = null
+        history = []
       }
 
       requiresBaseline = true
@@ -54,15 +102,34 @@ function createCameraMeasurementFilter(config) {
         angleVariationDegrees: null,
         stability: 0,
         reacquiring: true,
+        retainedDuringDetectionGrace: false,
+        lostDetectionDurationMs: lossStartedAt
+          ? measurement.timestamp - lossStartedAt
+          : 0,
+        lastValidDetectionAgeMs: null,
+        dataQuality: 'raw_invalid',
       }
     }
 
     const filtered = { ...measurement }
+    const nextHistory = [
+      ...history,
+      Object.fromEntries(
+        filteredFields.map((field) => [
+          field,
+          measurement[field],
+        ]),
+      ),
+    ].slice(-config.filtering.historySize)
 
     filteredFields.forEach((field) => {
+      const medianValue = median(
+        nextHistory.map((entry) => entry[field]),
+      )
+
       filtered[field] = smoothValue(
         previous?.[field],
-        measurement[field],
+        medianValue ?? measurement[field],
         config.filtering.smoothingFactor,
       )
     })
@@ -71,6 +138,7 @@ function createCameraMeasurementFilter(config) {
       previous = filtered
       lossStartedAt = null
       requiresBaseline = false
+      history = nextHistory
 
       return {
         ...filtered,
@@ -79,6 +147,10 @@ function createCameraMeasurementFilter(config) {
         angleVariationDegrees: null,
         stability: 0,
         reacquiring: true,
+        retainedDuringDetectionGrace: false,
+        lostDetectionDurationMs: 0,
+        lastValidDetectionAgeMs: 0,
+        dataQuality: 'baseline',
       }
     }
 
@@ -125,6 +197,8 @@ function createCameraMeasurementFilter(config) {
     )
 
     previous = filtered
+    lossStartedAt = null
+    history = nextHistory
 
     return {
       ...filtered,
@@ -133,6 +207,10 @@ function createCameraMeasurementFilter(config) {
       angleVariationDegrees,
       stability: Math.min(centerScore, sizeScore, angleScore),
       reacquiring: false,
+      retainedDuringDetectionGrace: false,
+      lostDetectionDurationMs: 0,
+      lastValidDetectionAgeMs: 0,
+      dataQuality: 'filtered',
     }
   }
 

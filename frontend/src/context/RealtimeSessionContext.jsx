@@ -21,7 +21,7 @@ import {
   getArtimirSocket,
   scheduleSocketDisconnect,
 } from '../realtime/socket'
-import { getPublicAppUrl } from '../realtime/runtimeUrls'
+import { getPublicPhoneBaseUrl } from '../realtime/runtimeUrls'
 import { logSessionDiagnostic } from '../realtime/sessionDiagnostics'
 import RealtimeSessionContext from './RealtimeSessionContext.js'
 
@@ -46,6 +46,12 @@ function RealtimeSessionProvider({ children }) {
   const [sessionError, setSessionError] = useState(null)
   const [phoneUrl, setPhoneUrl] = useState(null)
   const [qrCodeDataUrl, setQrCodeDataUrl] = useState(null)
+  const [qrDiagnostics, setQrDiagnostics] = useState({
+    phoneBaseUrl: null,
+    qrUrl: null,
+    qrMode: 'unconfigured',
+    error: null,
+  })
 
   if (!socketRef.current) {
     socketRef.current = getArtimirSocket()
@@ -200,6 +206,14 @@ function RealtimeSessionProvider({ children }) {
           if (response.qrCodeDataUrl) {
             setQrCodeDataUrl(response.qrCodeDataUrl)
           }
+          if (response.qrMode || response.qrError) {
+            setQrDiagnostics({
+              phoneBaseUrl: response.phoneBaseUrl ?? null,
+              qrUrl: response.qrUrl ?? response.phoneUrl ?? null,
+              qrMode: response.qrMode ?? 'unconfigured',
+              error: response.qrError ?? null,
+            })
+          }
 
           return response
         })
@@ -277,7 +291,7 @@ function RealtimeSessionProvider({ children }) {
           payload: {
             role: CLIENT_ROLES.display,
             clientId: getOrCreateClientId(CLIENT_ROLES.display),
-            publicAppUrl: getPublicAppUrl(),
+            publicPhoneBaseUrl: getPublicPhoneBaseUrl(),
           },
         },
       )
@@ -286,6 +300,17 @@ function RealtimeSessionProvider({ children }) {
       setRemoteSession(response.session)
       setPhoneUrl(response.phoneUrl)
       setQrCodeDataUrl(response.qrCodeDataUrl)
+      setQrDiagnostics({
+        phoneBaseUrl: response.phoneBaseUrl ?? null,
+        qrUrl: response.qrUrl ?? response.phoneUrl ?? null,
+        qrMode: response.qrMode ?? 'unconfigured',
+        error: response.qrError ?? null,
+      })
+
+      if (response.qrError) {
+        console.error(response.qrError)
+      }
+
       setConnectionStatus('connected')
       return response
     } finally {
@@ -329,6 +354,12 @@ function RealtimeSessionProvider({ children }) {
       setSessionError(null)
       setPhoneUrl(null)
       setQrCodeDataUrl(null)
+      setQrDiagnostics({
+        phoneBaseUrl: null,
+        qrUrl: null,
+        qrMode: 'unconfigured',
+        error: null,
+      })
     },
     [],
   )
@@ -434,6 +465,7 @@ function RealtimeSessionProvider({ children }) {
       joinSession,
       phoneUrl,
       qrCodeDataUrl,
+      qrDiagnostics,
       remoteSession,
       role,
       sendSessionEvent,
@@ -447,6 +479,7 @@ function RealtimeSessionProvider({ children }) {
       joinSession,
       phoneUrl,
       qrCodeDataUrl,
+      qrDiagnostics,
       remoteSession,
       role,
       sendSessionEvent,
