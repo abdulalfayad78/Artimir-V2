@@ -37,6 +37,8 @@ const synchronizedExperienceTranslations = {
       title: 'SCANNEZ POUR COMMENCER',
       scan: 'Scannez le QR code avec votre téléphone pour commencer.',
       phoneConnected: 'Téléphone connecté',
+      phoneDisconnected:
+        'Téléphone déconnecté. Un autre téléphone peut scanner le QR code.',
       profileProgress: 'Configuration de votre profil en cours',
       customizationProgress:
         'Personnalisation de l’expérience en cours',
@@ -124,6 +126,8 @@ const synchronizedExperienceTranslations = {
       title: 'SCAN TO BEGIN',
       scan: 'Scan the QR code with your phone to begin.',
       phoneConnected: 'Phone connected',
+      phoneDisconnected:
+        'Phone disconnected. Another phone can scan the QR code.',
       profileProgress: 'Your profile is being configured',
       customizationProgress: 'Your experience is being personalized',
       preparing: 'Preparing your experience',
@@ -209,6 +213,8 @@ const synchronizedExperienceTranslations = {
       title: 'امسح الرمز للبدء',
       scan: 'امسح رمز QR بهاتفك للبدء.',
       phoneConnected: 'تم اتصال الهاتف',
+      phoneDisconnected:
+        'انقطع اتصال الهاتف. يمكن لهاتف آخر مسح رمز QR.',
       profileProgress: 'جارٍ إعداد ملفك',
       customizationProgress: 'جارٍ تخصيص تجربتك',
       preparing: 'جارٍ تحضير تجربتك',
@@ -292,6 +298,8 @@ const synchronizedExperienceTranslations = {
       title: 'ESCANEA PARA EMPEZAR',
       scan: 'Escanea el código QR con tu teléfono para empezar.',
       phoneConnected: 'Teléfono conectado',
+      phoneDisconnected:
+        'Teléfono desconectado. Otro teléfono puede escanear el código QR.',
       profileProgress: 'Configurando tu perfil',
       customizationProgress: 'Personalizando tu experiencia',
       preparing: 'Preparando tu experiencia',

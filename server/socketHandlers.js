@@ -12,6 +12,15 @@ import { toPublicSession } from './sessionStore.js'
 const supportedLanguages = new Set(['fr', 'en', 'ar', 'es'])
 const sessionIdPattern = /^[23456789ABCDEFGHJKLMNPQRSTUVWXYZ]{6}$/
 const knownSocketEvents = new Set(Object.values(SOCKET_EVENTS))
+const defaultPhoneHeartbeatTimeoutMs = 15_000
+const phoneSetupStatuses = new Set([
+  SESSION_STATUSES.phoneConnected,
+  SESSION_STATUSES.languageSelected,
+  SESSION_STATUSES.profileInProgress,
+  SESSION_STATUSES.profileCompleted,
+  SESSION_STATUSES.customizationInProgress,
+  SESSION_STATUSES.customizationCompleted,
+])
 
 function roomName(sessionId) {
   return `session:${sessionId}`
@@ -92,6 +101,8 @@ function registerSocketHandlers(
     localAddress,
     publicPhoneBaseUrl,
     publicAppOrigin,
+    phoneHeartbeatTimeoutMs = defaultPhoneHeartbeatTimeoutMs,
+    now = () => Date.now(),
   } = {},
 ) {
   const emitSessionState = (session) => {
@@ -108,6 +119,91 @@ function registerSocketHandlers(
         mappingState,
       )
     }
+  }
+
+  const releasePhone = (
+    session,
+    {
+      reason,
+      socketId = null,
+      resetSetup = true,
+      notify = true,
+    } = {},
+  ) => {
+    if (!session?.phoneClientId && !session?.phoneSocketId && !session?.phoneConnected) {
+      return session
+    }
+
+    const previousPhoneClientId = session.phoneClientId
+    const shouldResetSetup =
+      resetSetup && phoneSetupStatuses.has(session.status)
+
+    if (shouldResetSetup) {
+      store.reset(session.id)
+      session = store.get(session.id)
+    } else {
+      session.phoneConnected = false
+      session.phoneSocketId = null
+      session.phoneClientId = null
+      session.phoneLastSeenAt = null
+      store.touch(session)
+    }
+
+    logServerSession('phone:released', {
+      sessionCode: session.id,
+      socketId,
+      previousPhoneClientId,
+      reason,
+      sessionStatus: session.status,
+    })
+
+    if (notify) {
+      io.to(roomName(session.id)).emit(
+        SOCKET_EVENTS.phoneDisconnected,
+        createEventEnvelope(session.id, {
+          connected: false,
+          reason,
+        }),
+      )
+      emitSessionState(session)
+    }
+
+    return session
+  }
+
+  const releaseStalePhoneIfNeeded = (session) => {
+    if (!session?.phoneClientId) {
+      return session
+    }
+
+    const phoneSocket = session.phoneSocketId
+      ? io.sockets.sockets.get(session.phoneSocketId)
+      : null
+    const hasActiveSocket = Boolean(phoneSocket?.connected)
+    const lastSeenAt = Number.isFinite(session.phoneLastSeenAt)
+      ? session.phoneLastSeenAt
+      : null
+    const heartbeatAgeMs =
+      lastSeenAt === null ? Infinity : now() - lastSeenAt
+
+    if (!hasActiveSocket || heartbeatAgeMs > phoneHeartbeatTimeoutMs) {
+      const releasedSession = releasePhone(session, {
+        reason: !hasActiveSocket
+          ? 'socket_inactive'
+          : 'heartbeat_stale',
+        socketId: session.phoneSocketId,
+        resetSetup: true,
+        notify: true,
+      })
+
+      if (hasActiveSocket) {
+        phoneSocket.disconnect(true)
+      }
+
+      return releasedSession
+    }
+
+    return session
   }
 
   const fail = (
@@ -329,12 +425,17 @@ function registerSocketHandlers(
           return
         }
 
+        const freshSession =
+          role === CLIENT_ROLES.phone
+            ? releaseStalePhoneIfNeeded(session)
+            : session
+
         logServerSession('session:join-session-found', {
           socketId: socket.id,
-          sessionCode: sessionId,
+          sessionCode: freshSession.id,
           clientId,
-          sessionStatus: session.status,
-          phoneAlreadyAssociated: Boolean(session.phoneClientId),
+          sessionStatus: freshSession.status,
+          phoneAlreadyAssociated: Boolean(freshSession.phoneClientId),
         })
 
         const socketKey =
@@ -349,8 +450,8 @@ function registerSocketHandlers(
           role === CLIENT_ROLES.phone
             ? 'phoneConnected'
             : 'displayConnected'
-        const existingSocketId = session[socketKey]
-        const existingClientId = session[clientKey]
+        const existingSocketId = freshSession[socketKey]
+        const existingClientId = freshSession[clientKey]
         const existingSocket = existingSocketId
           ? io.sockets.sockets.get(existingSocketId)
           : null
@@ -380,13 +481,16 @@ function registerSocketHandlers(
           return
         }
 
-        session[socketKey] = socket.id
-        session[clientKey] = clientId
-        session[connectedKey] = true
+        freshSession[socketKey] = socket.id
+        freshSession[clientKey] = clientId
+        freshSession[connectedKey] = true
+        if (role === CLIENT_ROLES.phone) {
+          freshSession.phoneLastSeenAt = now()
+        }
         socket.data.role = role
         socket.data.sessionId = sessionId
         socket.data.clientId = clientId
-        store.touch(session)
+        store.touch(freshSession)
         await socket.join(roomName(sessionId))
 
         if (
@@ -405,12 +509,13 @@ function registerSocketHandlers(
 
         if (
           role === CLIENT_ROLES.phone &&
-          session.status === SESSION_STATUSES.waitingForPhone
+          freshSession.status === SESSION_STATUSES.waitingForPhone
         ) {
           store.transition(
-            session.id,
+            freshSession.id,
             SESSION_STATUSES.phoneConnected,
           )
+          freshSession.status = SESSION_STATUSES.phoneConnected
         }
 
         logServerSession(
@@ -422,7 +527,7 @@ function registerSocketHandlers(
             sessionCode: sessionId,
             role,
             clientId,
-            sessionStatus: session.status,
+            sessionStatus: freshSession.status,
           },
         )
 
@@ -442,7 +547,7 @@ function registerSocketHandlers(
         const response = {
           ok: true,
           role,
-          session: toPublicSession(session),
+          session: toPublicSession(freshSession),
           ...pairing,
         }
         socket.emit(
@@ -460,9 +565,59 @@ function registerSocketHandlers(
           )
         }
 
-        emitSessionState(session)
+        emitSessionState(freshSession)
       },
     )
+
+    socket.on(SOCKET_EVENTS.phoneHeartbeat, (envelope, callback) => {
+      const result = requireSession(
+        socket,
+        envelope,
+        callback,
+        CLIENT_ROLES.phone,
+      )
+
+      if (!result) {
+        return
+      }
+
+      result.session.phoneLastSeenAt = now()
+      result.session.phoneConnected = true
+      result.session.phoneSocketId = socket.id
+      store.touch(result.session)
+      acknowledge(callback, {
+        ok: true,
+        session: toPublicSession(result.session),
+      })
+    })
+
+    socket.on(SOCKET_EVENTS.phoneLeaveSession, (envelope, callback) => {
+      const result = requireSession(
+        socket,
+        envelope,
+        callback,
+        CLIENT_ROLES.phone,
+      )
+
+      if (!result) {
+        return
+      }
+
+      const session = releasePhone(result.session, {
+        reason: 'phone_leave_session',
+        socketId: socket.id,
+        resetSetup: true,
+        notify: true,
+      })
+      socket.data.role = null
+      socket.data.sessionId = null
+      socket.data.clientId = null
+      socket.leave(roomName(session.id))
+      acknowledge(callback, {
+        ok: true,
+        session: toPublicSession(session),
+      })
+    })
 
     socket.on(
       SOCKET_EVENTS.phoneLanguageSelected,
@@ -785,8 +940,20 @@ function registerSocketHandlers(
         role === CLIENT_ROLES.phone &&
         session.phoneSocketId === socket.id
       ) {
-        session.phoneConnected = false
-        session.phoneSocketId = null
+        releasePhone(session, {
+          reason,
+          socketId: socket.id,
+          resetSetup: true,
+          notify: true,
+        })
+        logServerSession('socket:disconnected-session-kept', {
+          socketId: socket.id,
+          sessionCode: session.id,
+          role,
+          reason,
+          sessionStatus: store.get(session.id)?.status,
+        })
+        return
       }
 
       if (

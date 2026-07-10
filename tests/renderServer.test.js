@@ -351,7 +351,7 @@ test('Render API service builds the frontend before starting Node', async () => 
   assert.match(renderYaml, /name:\s*artimir-api/)
   assert.match(
     renderYaml,
-    /buildCommand:\s*npm ci && npm --prefix frontend ci && npm run build/,
+    /buildCommand:\s*npm ci --include=dev && npm --prefix frontend ci --include=dev && npm run build/,
   )
   assert.match(
     renderYaml,

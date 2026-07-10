@@ -143,6 +143,13 @@ function createArtimirServer(options = {}) {
     options.publicPhoneBaseUrl ??
     process.env.PUBLIC_PHONE_BASE_URL ??
     publicAppOrigins[0]
+  const phoneHeartbeatTimeoutMs =
+    options.phoneHeartbeatTimeoutMs ??
+    readPositiveInteger(
+      process.env.ARTIMIR_PHONE_HEARTBEAT_TIMEOUT_MS,
+      15_000,
+    )
+  const now = options.now ?? (() => Date.now())
   const allowedOrigins =
     options.allowedOrigins ??
     createAllowedOrigins({
@@ -151,7 +158,7 @@ function createArtimirServer(options = {}) {
       localAddress,
       publicAppOrigins,
     })
-  const store = new SessionStore({ ttlMs: sessionTtlMs })
+  const store = new SessionStore({ ttlMs: sessionTtlMs, now })
   const staticDir = options.staticDir ?? defaultStaticDir
   const staticIndexPath = path.join(staticDir, 'index.html')
 
@@ -224,6 +231,8 @@ function createArtimirServer(options = {}) {
     localAddress,
     publicPhoneBaseUrl,
     publicAppOrigin: publicAppOrigins[0],
+    phoneHeartbeatTimeoutMs,
+    now,
   })
 
   const expirationTimer = setInterval(() => {
@@ -290,6 +299,7 @@ function createArtimirServer(options = {}) {
       localAddress,
       port,
       publicAppOrigins,
+      phoneHeartbeatTimeoutMs,
       staticDir,
       sessionTtlMs,
     },

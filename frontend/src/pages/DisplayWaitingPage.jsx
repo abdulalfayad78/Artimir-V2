@@ -28,7 +28,9 @@ function DisplayWaitingPage({
 }) {
   const { t } = useTranslation()
   const statusKey =
-    displayStatusKeys[session?.status] ?? 'displayWaiting.connecting'
+    session && session.phoneConnected === false
+      ? 'displayWaiting.phoneDisconnected'
+      : displayStatusKeys[session?.status] ?? 'displayWaiting.connecting'
 
   return (
     <PageTransition className="experience-page display-waiting-page">

@@ -26,6 +26,7 @@ import { logSessionDiagnostic } from '../realtime/sessionDiagnostics'
 import RealtimeSessionContext from './RealtimeSessionContext.js'
 
 const acknowledgementTimeoutMs = 6_000
+const phoneHeartbeatIntervalMs = 5_000
 
 function RealtimeSessionProvider({ children }) {
   const socketRef = useRef(null)
@@ -456,6 +457,94 @@ function RealtimeSessionProvider({ children }) {
       })
     }
   }, [remoteSession?.id, remoteSession?.status])
+
+  useEffect(() => {
+    if (
+      role !== CLIENT_ROLES.phone ||
+      !sessionId ||
+      connectionStatus !== 'connected'
+    ) {
+      return undefined
+    }
+
+    const sendHeartbeat = () => {
+      const socket = socketRef.current
+
+      if (!socket.connected) {
+        return
+      }
+
+      socket.emit(SOCKET_EVENTS.phoneHeartbeat, {
+        sessionId,
+        payload: {},
+      })
+    }
+
+    sendHeartbeat()
+    const intervalId = window.setInterval(
+      sendHeartbeat,
+      phoneHeartbeatIntervalMs,
+    )
+
+    return () => {
+      window.clearInterval(intervalId)
+    }
+  }, [connectionStatus, role, sessionId])
+
+  useEffect(() => {
+    const leavePhoneSession = () => {
+      const identity = identityRef.current
+
+      if (
+        identity.role !== CLIENT_ROLES.phone ||
+        !identity.sessionId
+      ) {
+        return
+      }
+
+      const socket = socketRef.current
+
+      if (socket.connected) {
+        socket.emit(SOCKET_EVENTS.phoneLeaveSession, {
+          sessionId: identity.sessionId,
+          payload: {},
+        })
+      }
+
+      socket.disconnect()
+    }
+
+    const handlePageHide = () => {
+      leavePhoneSession()
+    }
+    const handleBeforeUnload = () => {
+      leavePhoneSession()
+    }
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'hidden') {
+        leavePhoneSession()
+      }
+    }
+
+    window.addEventListener('pagehide', handlePageHide)
+    window.addEventListener('beforeunload', handleBeforeUnload)
+    document.addEventListener(
+      'visibilitychange',
+      handleVisibilityChange,
+    )
+
+    return () => {
+      window.removeEventListener('pagehide', handlePageHide)
+      window.removeEventListener(
+        'beforeunload',
+        handleBeforeUnload,
+      )
+      document.removeEventListener(
+        'visibilitychange',
+        handleVisibilityChange,
+      )
+    }
+  }, [])
 
   const value = useMemo(
     () => ({

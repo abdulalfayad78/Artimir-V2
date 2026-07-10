@@ -33,6 +33,21 @@ function emitAck(socket, eventName, sessionId, payload = {}) {
   })
 }
 
+function waitForEvent(socket, eventName, predicate = () => true) {
+  return new Promise((resolve) => {
+    const handler = (payload) => {
+      if (!predicate(payload)) {
+        return
+      }
+
+      socket.off(eventName, handler)
+      resolve(payload)
+    }
+
+    socket.on(eventName, handler)
+  })
+}
+
 test('phone and display complete the synchronized positioning handoff', async (t) => {
   const server = createArtimirServer({
     port: 0,
@@ -320,6 +335,245 @@ test('display session creation reports a clear QR error without public phone URL
     response.qrError,
     'URL publique téléphone non configurée',
   )
+})
+
+test('a second phone is refused while the first phone is active', async (t) => {
+  const server = createArtimirServer({
+    port: 0,
+    localAddress: '127.0.0.1',
+    publicPhoneBaseUrl: 'https://app.artimir.fr',
+  })
+  const address = await server.listen()
+  const url = `http://127.0.0.1:${address.port}`
+  const display = await connectClient(url)
+  const firstPhone = await connectClient(url)
+  const secondPhone = await connectClient(url)
+
+  t.after(async () => {
+    display.disconnect()
+    firstPhone.disconnect()
+    secondPhone.disconnect()
+    await server.close()
+  })
+
+  const created = await emitAck(
+    display,
+    SOCKET_EVENTS.sessionCreate,
+    null,
+    {
+      role: CLIENT_ROLES.display,
+      clientId: 'display-active-phone-refusal',
+    },
+  )
+  const firstJoin = await emitAck(
+    firstPhone,
+    SOCKET_EVENTS.sessionJoin,
+    created.session.id,
+    {
+      role: CLIENT_ROLES.phone,
+      clientId: 'first-active-phone-client',
+    },
+  )
+  const secondJoin = await emitAck(
+    secondPhone,
+    SOCKET_EVENTS.sessionJoin,
+    created.session.id,
+    {
+      role: CLIENT_ROLES.phone,
+      clientId: 'second-active-phone-client',
+    },
+  )
+
+  assert.equal(firstJoin.ok, true)
+  assert.equal(secondJoin.ok, false)
+  assert.equal(secondJoin.error.code, 'SESSION_ALREADY_USED')
+})
+
+test('disconnecting the first phone frees the same session code for a new phone', async (t) => {
+  const server = createArtimirServer({
+    port: 0,
+    localAddress: '127.0.0.1',
+    publicPhoneBaseUrl: 'https://app.artimir.fr',
+  })
+  const address = await server.listen()
+  const url = `http://127.0.0.1:${address.port}`
+  const display = await connectClient(url)
+  const firstPhone = await connectClient(url)
+  const secondPhone = await connectClient(url)
+
+  t.after(async () => {
+    display.disconnect()
+    firstPhone.disconnect()
+    secondPhone.disconnect()
+    await server.close()
+  })
+
+  const created = await emitAck(
+    display,
+    SOCKET_EVENTS.sessionCreate,
+    null,
+    {
+      role: CLIENT_ROLES.display,
+      clientId: 'display-phone-disconnect-release',
+    },
+  )
+  const phoneDisconnected = waitForEvent(
+    display,
+    SOCKET_EVENTS.phoneDisconnected,
+    (envelope) => envelope.sessionId === created.session.id,
+  )
+  await emitAck(
+    firstPhone,
+    SOCKET_EVENTS.sessionJoin,
+    created.session.id,
+    {
+      role: CLIENT_ROLES.phone,
+      clientId: 'first-disconnecting-phone',
+    },
+  )
+
+  firstPhone.disconnect()
+  const disconnectedEnvelope = await phoneDisconnected
+  const secondJoin = await emitAck(
+    secondPhone,
+    SOCKET_EVENTS.sessionJoin,
+    created.session.id,
+    {
+      role: CLIENT_ROLES.phone,
+      clientId: 'second-after-disconnect-phone',
+    },
+  )
+
+  assert.equal(disconnectedEnvelope.payload.connected, false)
+  assert.equal(secondJoin.ok, true)
+  assert.equal(secondJoin.session.id, created.session.id)
+  assert.equal(secondJoin.session.phoneConnected, true)
+})
+
+test('phone leave-session frees the session and notifies the display', async (t) => {
+  const server = createArtimirServer({
+    port: 0,
+    localAddress: '127.0.0.1',
+    publicPhoneBaseUrl: 'https://app.artimir.fr',
+  })
+  const address = await server.listen()
+  const url = `http://127.0.0.1:${address.port}`
+  const display = await connectClient(url)
+  const firstPhone = await connectClient(url)
+  const secondPhone = await connectClient(url)
+
+  t.after(async () => {
+    display.disconnect()
+    firstPhone.disconnect()
+    secondPhone.disconnect()
+    await server.close()
+  })
+
+  const created = await emitAck(
+    display,
+    SOCKET_EVENTS.sessionCreate,
+    null,
+    {
+      role: CLIENT_ROLES.display,
+      clientId: 'display-phone-leave-release',
+    },
+  )
+  await emitAck(
+    firstPhone,
+    SOCKET_EVENTS.sessionJoin,
+    created.session.id,
+    {
+      role: CLIENT_ROLES.phone,
+      clientId: 'first-leaving-phone',
+    },
+  )
+  const phoneDisconnected = waitForEvent(
+    display,
+    SOCKET_EVENTS.phoneDisconnected,
+    (envelope) => envelope.sessionId === created.session.id,
+  )
+  const leave = await emitAck(
+    firstPhone,
+    SOCKET_EVENTS.phoneLeaveSession,
+    created.session.id,
+  )
+  const disconnectedEnvelope = await phoneDisconnected
+  const secondJoin = await emitAck(
+    secondPhone,
+    SOCKET_EVENTS.sessionJoin,
+    created.session.id,
+    {
+      role: CLIENT_ROLES.phone,
+      clientId: 'second-after-leave-phone',
+    },
+  )
+
+  assert.equal(leave.ok, true)
+  assert.equal(disconnectedEnvelope.payload.reason, 'phone_leave_session')
+  assert.equal(secondJoin.ok, true)
+  assert.equal(secondJoin.session.id, created.session.id)
+})
+
+test('a stale phone heartbeat releases the slot for a new phone', async (t) => {
+  let currentTime = 1_000
+  const server = createArtimirServer({
+    port: 0,
+    localAddress: '127.0.0.1',
+    publicPhoneBaseUrl: 'https://app.artimir.fr',
+    phoneHeartbeatTimeoutMs: 10_000,
+    now: () => currentTime,
+  })
+  const address = await server.listen()
+  const url = `http://127.0.0.1:${address.port}`
+  const display = await connectClient(url)
+  const firstPhone = await connectClient(url)
+  const secondPhone = await connectClient(url)
+
+  t.after(async () => {
+    display.disconnect()
+    firstPhone.disconnect()
+    secondPhone.disconnect()
+    await server.close()
+  })
+
+  const created = await emitAck(
+    display,
+    SOCKET_EVENTS.sessionCreate,
+    null,
+    {
+      role: CLIENT_ROLES.display,
+      clientId: 'display-stale-phone-release',
+    },
+  )
+  await emitAck(
+    firstPhone,
+    SOCKET_EVENTS.sessionJoin,
+    created.session.id,
+    {
+      role: CLIENT_ROLES.phone,
+      clientId: 'first-stale-phone',
+    },
+  )
+  await emitAck(
+    firstPhone,
+    SOCKET_EVENTS.phoneHeartbeat,
+    created.session.id,
+  )
+
+  currentTime += 20_000
+  const secondJoin = await emitAck(
+    secondPhone,
+    SOCKET_EVENTS.sessionJoin,
+    created.session.id,
+    {
+      role: CLIENT_ROLES.phone,
+      clientId: 'second-after-stale-phone',
+    },
+  )
+
+  assert.equal(secondJoin.ok, true)
+  assert.equal(secondJoin.session.id, created.session.id)
+  assert.equal(secondJoin.session.phoneConnected, true)
 })
 
 test('the original phone client can reconnect without opening a second slot', async (t) => {
